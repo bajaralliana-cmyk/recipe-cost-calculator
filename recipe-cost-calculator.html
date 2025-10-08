@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Recipe Cost Calculator — Editable Buffer, Markup & Food Cost</title>
+  <style>
+    :root { --bg:#f7fafc; --card:#fff; --accent:#0ea5a4; }
+    body { font-family:Inter,ui-sans-serif,system-ui; background:var(--bg); margin:0; color:#111827; }
+    .wrap { max-width:980px; margin:28px auto; padding:20px; }
+    .card { background:var(--card); border-radius:12px; padding:18px; box-shadow:0 6px 18px rgba(15,23,42,0.06); }
+    input, select, button { font-size:14px; padding:8px; border-radius:8px; border:1px solid #e5e7eb; }
+    input[type=number] { width:90px; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:8px; border-top:1px solid #eef2f7; }
+    .btn { background:var(--accent); color:#fff; border:none; border-radius:8px; cursor:pointer; padding:6px 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Recipe Cost Calculator (Auto Update)</h2>
+      <div style="display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; align-items:center;">
+        <input id="recipeName" placeholder="Recipe Name" />
+        <label>Servings: <input id="servings" type="number" min="1" value="1" /></label>
+        <label>Buffer %: <input id="buffer" type="number" min="0" step="0.1" value="5" /></label>
+        <label>Markup %: <input id="markup" type="number" min="0" step="0.1" value="30" /></label>
+        <label>Food Cost %: <input id="foodCostInput" type="number" min="0" step="0.1" value="35" /></label>
+      </div>
+
+      <table id="table">
+        <thead>
+          <tr>
+            <th>Ingredient</th>
+            <th>Package Size</th>
+            <th>Package Unit</th>
+            <th>Package Cost</th>
+            <th>Used Weight</th>
+            <th>Used Unit</th>
+            <th>Cost/Serving</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <button id="addRow" class="btn">+ Add Ingredient</button>
+
+      <h3>Results</h3>
+      <div id="results"></div>
+    </div>
+  </div>
+  <script>
+    const tbody=document.querySelector('tbody');
+    const results=document.getElementById('results');
+    const addRowBtn=document.getElementById('addRow');
+
+    function addRow(data={}){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td><input class="name" value="${data.name||''}"></td>
+        <td><input type="number" class="pkgSize" value="${data.pkgSize||''}"></td>
+        <td><select class="pkgUnit"><option>g</option><option>kg</option><option>ml</option><option>l</option><option>pcs</option></select></td>
+        <td><input type="number" class="pkgCost" value="${data.pkgCost||''}"></td>
+        <td><input type="number" class="useWeight" value="${data.useWeight||''}"></td>
+        <td><select class="useUnit"><option>g</option><option>kg</option><option>ml</option><option>l</option><option>pcs</option></select></td>
+        <td class="costServe">₱0.00</td>
+        <td><button class="btn del">✕</button></td>`;
+      tbody.appendChild(tr);
+      tr.querySelectorAll('input,select').forEach(i=>i.addEventListener('input',computeAll));
+      tr.querySelector('.del').onclick=()=>{tr.remove();computeAll();};
+      tr.querySelector('.name').focus();
+    }
+
+    function convertToGrams(val,unit){
+      val=parseFloat(val)||0;
+      if(unit==='kg')return val*1000;
+      if(unit==='g')return val;
+      if(unit==='l')return val*1000;
+      if(unit==='ml')return val;
+      return val;
+    }
+
+    function computeAll(){
+      let total=0;
+      tbody.querySelectorAll('tr').forEach(tr=>{
+        const pkgSize=convertToGrams(tr.querySelector('.pkgSize').value,tr.querySelector('.pkgUnit').value);
+        const pkgCost=parseFloat(tr.querySelector('.pkgCost').value)||0;
+        const useWeight=convertToGrams(tr.querySelector('.useWeight').value,tr.querySelector('.useUnit').value);
+        const costPerGram=pkgSize>0?pkgCost/pkgSize:0;
+        const costForUse=costPerGram*useWeight;
+        tr.querySelector('.costServe').textContent='₱'+costForUse.toFixed(2);
+        total+=costForUse;
+      });
+
+      const servings=parseFloat(document.getElementById('servings').value)||1;
+      const markup=parseFloat(document.getElementById('markup').value)||0;
+      const bufferPct=parseFloat(document.getElementById('buffer').value)||0;
+      const desiredFoodCost=parseFloat(document.getElementById('foodCostInput').value)||0;
+
+      const costPerServing=total/servings;
+      const buffer=total*(bufferPct/100);
+      const adjusted=total+buffer;
+      const sellPriceFromMarkup=costPerServing*(1+markup/100);
+      const sellPriceFromFoodCost = desiredFoodCost>0 ? costPerServing/(desiredFoodCost/100) : sellPriceFromMarkup;
+      const foodCost=(costPerServing/sellPriceFromFoodCost)*100;
+
+      results.innerHTML=`
+        <p>Total Cost: ₱${total.toFixed(2)}</p>
+        <p>Buffer (${bufferPct}%): ₱${buffer.toFixed(2)}</p>
+        <p>Adjusted Cost: ₱${adjusted.toFixed(2)}</p>
+        <p>Cost per Serving: ₱${costPerServing.toFixed(2)}</p>
+        <p>Suggested Selling Price (Markup ${markup}%): ₱${sellPriceFromMarkup.toFixed(2)}</p>
+        <p>Suggested Selling Price (Target Food Cost ${desiredFoodCost}%): ₱${sellPriceFromFoodCost.toFixed(2)}</p>
+        <p>Food Cost %: ${foodCost.toFixed(1)}%</p>`;
+    }
+
+    addRowBtn.onclick=()=>{addRow();};
+    ['servings','markup','buffer','foodCostInput'].forEach(id=>{
+      document.getElementById(id).addEventListener('input',computeAll);
+      document.getElementById(id).addEventListener('change',computeAll);
+    });
+    addRow();
+  </script>
+</body>
+</html>
